@@ -1,8 +1,8 @@
 # Depths AI docs
 
-Depths AI is building a unified storage layer called **"gyaan"** for AI Agents and applications. The aim of the package is to enable developers to integrate vector-embedding database, chat history, analytics logs, knowledge graphs and a memory agent layer on top it, within few lines of code.
+Depths AI is building a unified storage layer called **gyaan** for AI Agents and applications. The aim of the package is to enable developers to integrate vector-embedding database, chat history, analytics logs, knowledge graphs and a memory agent layer on top it, within few lines of code.
 
-Currently, **gyaan **is **v0.1: The world's cheapest S3-compatible vector embedding database**. 
+Currently, **gyaan** is **v0.1: The world's cheapest S3-compatible vector embedding database**. 
 
 The project is and will proudly remain open-source\! For ease, you can also try out accessing our cloud version (currently in open-beta) at https://www.depthsai.com/auth/sign-up 
 
@@ -19,7 +19,7 @@ Leveraging a unified storage core for S3-compatible storage, we would introduce 
 
 ### Install Gyaan DB
 
-We recommend using [uv](https://docs.astral.sh/uv/) for managing your python projects. Command to add **gyaan **in an existing **uv** project is as follows
+We recommend using [uv](https://docs.astral.sh/uv/) for managing your python projects. Command to add **gyaan** in an existing **uv** project is as follows
 
 ```bash
 uv add gyaan

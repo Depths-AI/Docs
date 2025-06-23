@@ -1,71 +1,52 @@
 ---
 title: Introduction
-description: "Welcome to the home of your new documentation"
+description: "Building the unified storage layer for AI Agents and applications"
 ---
 
-<img
-  className="block dark:hidden"
-  src="/images/hero-light.png"
-  alt="Hero Light"
-/>
-<img
-  className="hidden dark:block"
-  src="/images/hero-dark.png"
-  alt="Hero Dark"
-/>
+Depths AI is building a unified storage layer called **gyaan** for AI Agents and applications. The aim of the package is to enable developers to integrate vector-embedding database, chat history, analytics logs, knowledge graphs and a memory agent layer on top it, within few lines of code.
 
-## Setting up
+Currently, **gyaan** is **v0.1: The world's cheapest S3-compatible vector embedding database**. 
 
-The first step to world-class documentation is setting up your editing environments.
+The project is and will proudly remain open-source\! For ease of usage, we encourage you to try out the free tier of the [cloud version](https://www.depthsai.com/auth/sign-up) (currently in open-beta). 
 
-<CardGroup cols={2}>
-  <Card
-    title="Edit Your Docs"
-    icon="pen-to-square"
-    href="https://mintlify.com/docs/quickstart"
-  >
-    Get your docs set up locally for easy development
-  </Card>
-  <Card
-    title="Preview Changes"
-    icon="image"
-    href="https://mintlify.com/docs/development"
-  >
-    Preview your changes before you push to make sure they're perfect
-  </Card>
-</CardGroup>
+### Brief Roadmap
 
-## Make it yours
+Leveraging a unified storage core for S3-compatible storage, we would introduce the remaining aspects of storage layer as:
 
-Update your docs to your brand and add valuable content for the best user conversion.
+1. v0.2: Chat history
+2. v0.3: Analytics logs
+3. v0.4: Knowledge graph
+4. v0.5: Memory agent layer
+5. v0.6-0.9: Improving storage flexibility, indexing quality, MCP support etc
+6. v1.0: Production ready\!
+
+### Install Gyaan DB
+
+We recommend using [uv](https://docs.astral.sh/uv/) for managing your python projects. Command to add **gyaan** in an existing **uv** project is as follows
+
+```bash
+uv add gyaan
+```
+
+Or if you prefer pip installation for your python projects:
+
+```bash
+pip install gyaan
+```
 
 <CardGroup cols={2}>
   <Card
-    title="Customize Style"
-    icon="palette"
-    href="https://mintlify.com/docs/settings/global"
-  >
-    Customize your docs to your company's colors and brands
-  </Card>
-  <Card
-    title="Reference APIs"
-    icon="code"
-    href="https://mintlify.com/docs/api-playground/openapi"
-  >
-    Automatically generate endpoints from an OpenAPI spec
-  </Card>
-  <Card
-    title="Add Components"
+    title="Run gyaan locally"
     icon="screwdriver-wrench"
-    href="https://mintlify.com/docs/content/components/accordions"
+    href="https://docs.depthsai.com/quickstart"
   >
-    Build interactive features and designs to guide your users
+    Start using **gyaan** locally on your disk or connect it to your S3 bucket.
   </Card>
   <Card
-    title="Get Inspiration"
-    icon="stars"
-    href="https://mintlify.com/customers"
+    title="Access gyaan in the cloud"
+    icon="cloud"
+    href="https://docs.depthsai.com/api-reference/introduction"
   >
-    Check out our showcase of our favorite documentation
+    Integrate **gyaan** in your AI agent via the cloud client-side SDK.
   </Card>
 </CardGroup>
