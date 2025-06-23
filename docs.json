@@ -1,11 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Depths AI Documentation",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#00FF9C",
+    "light": "#00FF9C",
+    "dark": "#000957"
   },
   "favicon": "/favicon.svg",
   "navigation": {
