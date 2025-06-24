@@ -193,18 +193,22 @@ Therefore, for each search operation, we require 3 values:
 3. `centroid_search_radius`: Maximum number of clusters to filter for performing full search. Default value is 3
 4. `distance_metric`: Currently, we support "euclidean" and "cosine". Default value is "cosine".
 
-The objective of clustering is to efficiently store and retrieve vectors. 
+The objective of clustering is to efficiently store and retrieve vectors.
 
-Our search function returns the lists of filenames and filebytes as the response:
+Our search function returns the lists of filenames and filebytes as the response. For demo purposes, we are using a randomly generated numpy array with appropriate dimensions.
 
 <CodeGroup>
 
 ```python default
+query=np.random.random((1, 1536)).tolist()[0] # replace with actual array
+
 filenames, filebytes=await vector_store.search_vectors(query=query)
 ```
 
 
 ```python custom
+query=np.random.random((1, 1536)).tolist()[0] # replace with actual array
+    
 filenames, filebytes=await vector_store.search_vectors(
         query=query,
         top_k=2,
@@ -213,3 +217,7 @@ filenames, filebytes=await vector_store.search_vectors(
 ```
 
 </CodeGroup>
+
+## Soft-delete vector embeddings
+
+## Permanently delete vector embedding-content pairs
