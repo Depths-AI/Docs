@@ -7,7 +7,7 @@ description: "Start using **gyaan** vector database locally within 15 minutes"
 
 We recommend using [uv](https://docs.astral.sh/uv/) for managing your python projects. It allows you to seamlessly manage dependencies at a project level, without disturbing your global python installation.
 
-### Install uv if you are currently pip (recommended)
+### Install uv if you are currently using pip (recommended)
 
 ```bash
 pip install uv
@@ -75,7 +75,7 @@ asyncio.run(main())
 <Accordion title="Explanation" icon="sparkles" iconType="regular">
   1. The `create()` class method creates a new `VectorStorage` object, that you can use later in your code. It assigns a random UUIDv6 as the store_id to this object, for time-stamped uniqueness.
   2. You have to specify the relative path for storage and the dimension of your vector embeddings upfront as the bare minimum params.
-  3. It also creates 4 directories inside the specified relative path. In our case, we specify the path as "first_store", which would create a sub-directory titled "first_store" in the directory where you are running your python script. 
+  3. It also creates 4 directories inside the specified relative path. In our case, we specify the path as "first_store", which would create a sub-directory titled "first_store" in the directory where you are running your python script.
   4. These 4 directories are: (a) **kv**: stores the actual embedding (key) and file path (value) pairs (b) **files**: The "values" or the information for which you are generating embeddings. This style allows us to store multi-modal vector embedding stores, allowing file to be of any format (c) **metadata**: The "definition" of the vector store (d) **index**: Index for your vector embeddings for efficient storage and retrieval.
   5. The `create()` also allows you to specify additional metadata information like title, description, keywords, and even a custom store_id, which is useful when you want to attach a vector store to a particular AI Agent or your app's user via their ID.
 </Accordion>
@@ -129,13 +129,13 @@ Let us now come to the core operation: inserting vector embeddings and the infor
 
 To enable **multi-modal support out of the box**, each piece of information is stored as a file, handled as raw bytes. This allows you to store text, PDFs, media files and even code scripts as the content in gyaan vector database.
 
-#### Inserting a batch of vector embedding-content pairs (recommended)
+### Inserting a batch of vector embedding-content pairs (recommended)
 
 While gyaan supports inserting a single vector-content pair (simply keeping batch size as 1), we recommend inserting multiple vectors in one-go to utilize the inherent parallelization in the implementation.
 
 For inserting a vector embedding-content pair, we need 3 things:
 
-1. The vector embedding, having the same dimension as specified during database initialization 
+1. The vector embedding, having the same dimension as specified during database initialization
 2. The content, as bytes
 3. The filename with extension
 
@@ -157,7 +157,7 @@ await vector_store.batch_insert_vectors(
 ```
 
 <Note>
-  Note that the embedding is not normalized. Internally, gyaan automatically normalizes each embedding vector. 
+  Note that the embedding is not normalized. Internally, gyaan automatically normalizes each embedding vector.
 </Note>
 
 Let us now insert 3 more vectors, leveraging parallelism of the batch insertion. Note that for demo purposes, we are inserting 3 randomly generated vectors using `numpy` but in practise you would be using the embedding provider of your choice.
@@ -181,3 +181,35 @@ You can view the most recently inserted vector embeddings via `get_vectors` meth
 ```python
 print(await vector_store.get_vectors())
 ```
+
+## Querying the vector database
+
+Internally, the vector database is broken down into clusters. For each query, via the index, we first find the relevant clusters, and then within those clusters, perform full search to get our desired number of vector embedding-content pairs
+
+Therefore, for each search operation, we require 3 values:
+
+1. Query vector embedding, having the same dimension as specified during database initialization
+2. `top_k` : Maximum number of desired search results. Default value is 10
+3. `centroid_search_radius`: Maximum number of clusters to filter for performing full search. Default value is 3
+4. `distance_metric`: Currently, we support "euclidean" and "cosine". Default value is "cosine".
+
+The objective of clustering is to efficiently store and retrieve vectors. 
+
+Our search function returns the lists of filenames and filebytes as the response:
+
+<CodeGroup>
+
+```python default
+filenames, filebytes=await vector_store.search_vectors(query=query)
+```
+
+
+```python custom
+filenames, filebytes=await vector_store.search_vectors(
+        query=query,
+        top_k=2,
+        centroid_search_radius=1,
+        distance_metric="euclidean")
+```
+
+</CodeGroup>
