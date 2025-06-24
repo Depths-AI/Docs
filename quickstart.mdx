@@ -1,6 +1,6 @@
 ---
 title: "Quickstart"
-description: "Start using **gyaan** locally within 15 minutes"
+description: "Start using **gyaan** vector database locally within 15 minutes"
 ---
 
 ## Setup
@@ -33,11 +33,11 @@ uv venv
 uv add gyaan
 ```
 
-## Create your first vector store
+## Create your first vector database
 
-With the environment set up, let us now create our first gyaan vector storage. Since gyaan is an on-disk vector store (vector embeddings are read from the disk on-demand), it is prudent to keep most operations async.
+With the environment set up, let us now create our first gyaan vector storage. Since gyaan is an on-disk vector database (vector embeddings are read from the disk on-demand), it is prudent to keep most operations async.
 
-Therefore, to use gyaan, we have to use the async mode in python. Let us create our first vector store:
+Therefore, to use gyaan, we have to use the async mode in python. Let us create our first vector database:
 
 <CodeGroup>
 
@@ -79,3 +79,105 @@ asyncio.run(main())
   4. These 4 directories are: (a) **kv**: stores the actual embedding (key) and file path (value) pairs (b) **files**: The "values" or the information for which you are generating embeddings. This style allows us to store multi-modal vector embedding stores, allowing file to be of any format (c) **metadata**: The "definition" of the vector store (d) **index**: Index for your vector embeddings for efficient storage and retrieval.
   5. The `create()` also allows you to specify additional metadata information like title, description, keywords, and even a custom store_id, which is useful when you want to attach a vector store to a particular AI Agent or your app's user via their ID.
 </Accordion>
+
+## Loading an existing vector database
+
+The metadata makes it easy for quick loading of an existing vector database into your python script for further computation
+
+Let us retrieve the database that we created in the previous step.
+
+```python
+import asyncio
+from gyaan import VectorStorage
+
+async def main():
+	retrieved_store=await VectorStorage.load(
+        vector_path="first_store")
+
+asyncio.run(main())
+```
+
+If you added the optional metadata fields, you can quickly validate whether the database loaded correctly or not by printing those metadata fields. Here is the**full example** : creating a vector database with metadata and then retrieving it from disk and displaying metadata fields
+
+```python
+import asyncio
+from gyaan import VectorStorage
+
+async def main():
+    vector_store = await VectorStorage.create(
+        vector_path="first_store",
+        embedding_dim=1536,
+        title="Your specified title",
+        description="You can also add some description",
+        store_id="abcdefgh", 
+        keywords=["depths-ai","gyaan","vector database"])
+    
+    retrieved_store=await VectorStorage.load(
+        vector_path="first_store")
+
+    print("Title:",retrieved_store.title)
+    print("Description:",retrieved_store.description)
+    print("Store ID:",retrieved_store.id)
+    print("Keywords:",retrieved_store.keywords)
+
+asyncio.run(main())
+```
+
+## Inserting vector embeddings and corresponding content
+
+Let us now come to the core operation: inserting vector embeddings and the information it represents in the vector database.
+
+To enable **multi-modal support out of the box**, each piece of information is stored as a file, handled as raw bytes. This allows you to store text, PDFs, media files and even code scripts as the content in gyaan vector database.
+
+#### Inserting a batch of vector embedding-content pairs (recommended)
+
+While gyaan supports inserting a single vector-content pair (simply keeping batch size as 1), we recommend inserting multiple vectors in one-go to utilize the inherent parallelization in the implementation.
+
+For inserting a vector embedding-content pair, we need 3 things:
+
+1. The vector embedding, having the same dimension as specified during database initialization 
+2. The content, as bytes
+3. The filename with extension
+
+<Note>
+  You do not have to worry about filename uniqueness. Internally, gyaan takes care of that by attaching a unique UUID v6 suffix to each filename. This suffix corresponds to the unique ID that gyaan assigns to each vector-content pair.
+</Note>
+
+Let us insert 1 vector-content pair into our vector database that we created in the previous step
+
+```python
+content=b"Sample content"
+embedding=[1.0]*1536
+filename="example.txt"
+
+await vector_store.batch_insert_vectors(
+        embeddings=[embedding],
+        files_bytes=[content],
+        file_names=[filename])
+```
+
+<Note>
+  Note that the embedding is not normalized. Internally, gyaan automatically normalizes each embedding vector. 
+</Note>
+
+Let us now insert 3 more vectors, leveraging parallelism of the batch insertion. Note that for demo purposes, we are inserting 3 randomly generated vectors using `numpy` but in practise you would be using the embedding provider of your choice.
+
+```python
+import numpy as np
+
+content=[b"cat",b"dog",b"horse"]
+embeddings=np.random.random((3, 1536)).tolist()
+filenames=["cat.txt","dog.txt","horse.txt"]
+
+await vector_store.batch_insert_vectors(
+    embeddings=embeddings,
+    files_bytes=content,
+    file_names=filenames
+)
+```
+
+You can view the most recently inserted vector embeddings via `get_vectors` method, which returns up to 100 vectors by default
+
+```python
+print(await vector_store.get_vectors())
+```
