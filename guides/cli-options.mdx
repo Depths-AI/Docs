@@ -1,4 +1,195 @@
 ---
-title: CLI Options - Customizing the commands
-description: Deeper control over instance init, server start , view and status check
+title: CLI options
+description: Deep dive into each depths CLI command with flags and OS-specific examples.
+---
+
+# CLI options
+
+The CLI in `depths.cli.cli` manages a local OTLP/HTTP server (`depths.cli.app:app`) and your on-disk instance layout. This page explains every command, its flags, defaults, and short examples for macOS/Linux and Windows (PowerShell).
+
+> Tip: See `depths <command> --help` any time for built-in usage.
+
+## `depths` init
+
+Initialize a new on-disk instance. Creates the directory layout and baseline config by instantiating `depths.core.logger.DepthsLogger` once.
+
+### Synopsis
+```bash
+depths init [OPTIONS]
+````
+
+### Options
+
+| Flag                  | Type   |         Default | Description                                              |
+| --------------------- | ------ | --------------: | -------------------------------------------------------- |
+| `--instance-id`, `-I` | string |       `default` | Logical instance id (used as folder name under `--dir`). |
+| `--dir`, `-D`         | path   | `./depths_data` | Root directory where the instance lives.                 |
+
+### Examples
+
+
+<CodeGroup>
+```bash macOS/Linux
+depths init
+depths init -I prod -D ./observability
+```
+
+```powershell Windows (PowerShell)
+depths init
+depths init -I prod -D .\observability
+```
+</CodeGroup>
+
+---
+
+## `depths` start
+
+Start the OTLP/HTTP server (FastAPI + Uvicorn) for an instance.
+
+### Synopsis
+
+```bash
+depths start [OPTIONS]
+```
+
+### Options
+
+| Flag                  | Type   |         Default | Description                                          |
+| --------------------- | ------ | --------------: | ---------------------------------------------------- |
+| `--instance-id`, `-I` | string |       `default` | Instance to serve.                                   |
+| `--dir`, `-D`         | path   | `./depths_data` | Root directory for the instance.                     |
+| `--host`, `-H`        | string |       `0.0.0.0` | Bind host for OTLP/HTTP.                             |
+| `--port`, `-P`        | int    |          `4318` | Bind port (OTLP/HTTP default).                       |
+| `--reload`, `-R`      | bool   |         `false` | Code reload. **Only supported with `--foreground`.** |
+| `--foreground`, `-F`  | bool   |         `false` | Run in the current terminal (not daemonized).        |
+
+### Examples
+
+<CodeGroup>
+```bash macOS/Linux
+# background (daemonized)
+depths start -I prod -D ./observability -H 0.0.0.0 -P 4318
+
+# foreground with live logs
+depths start -I prod -D ./observability --foreground
+
+# hot reload (foreground only)
+depths start --foreground --reload
+```
+
+```powershell Windows (PowerShell)
+# background (daemonized)
+depths start -I prod -D .\observability -H 0.0.0.0 -P 4318
+
+# foreground with live logs
+depths start -I prod -D .\observability --foreground
+
+# hot reload (foreground only)
+depths start --foreground --reload
+```
+</CodeGroup>
+---
+
+## `depths` view
+
+Pretty-print the latest rows from a persisted OTel table (from local or S3, depending on `--storage` and your environment).
+
+### Synopsis
+
+```bash
+depths view [OPTIONS]
+```
+
+### Options
+
+| Flag                  | Type       |         Default | Description                                                                                                            |
+| --------------------- | ---------- | --------------: | ---------------------------------------------------------------------------------------------------------------------- |
+| `--instance-id`, `-I` | string     |       `default` | Instance to read from.                                                                                                 |
+| `--dir`, `-D`         | path       | `./depths_data` | Root directory for the instance.                                                                                       |
+| `--storage`, `-S`     | enum       |          `auto` | Source: `auto` | `local` | `s3`.                                                                                       |
+| `--rows`, `-n`        | int        |            `10` | Show latest N rows by `event_ts`.                                                                                      |
+| `--table`, `-t`       | enum       |               — | One of: `spans`, `span_events`, `span_links`, `logs`, `metrics_points`, `metrics_hist`. If omitted, a picker is shown. |
+| `--select`, `-s`      | repeatable |               — | Project specific columns (repeat `-s` for multiple).                                                                   |
+| `--date-from`         | YYYY-MM-DD |               — | Start day (UTC, inclusive).                                                                                            |
+| `--date-to`           | YYYY-MM-DD |               — | End day (UTC, inclusive).                                                                                              |
+
+### Examples
+
+```bash
+# latest 10 spans
+depths view -t spans
+
+# latest 50 logs with selected columns
+depths view -t logs -n 50 -s trace_id -s span_id -s body
+
+# force local or s3
+depths view -t spans -S local
+depths view -t spans -S s3
+```
+
+
+
+---
+
+## `depths` status
+
+Query the running server’s `/healthz` and render producer/aggregator stats.
+
+### Synopsis
+
+```bash
+depths status [OPTIONS]
+```
+
+### Options
+
+| Flag              | Type   |     Default | Description              |
+| ----------------- | ------ | ----------: | ------------------------ |
+| `--host`, `-H`    | string | `127.0.0.1` | Server host to probe.    |
+| `--port`, `-P`    | int    |      `4318` | Server port to probe.    |
+| `--timeout`, `-T` | float  |       `5.0` | HTTP timeout in seconds. |
+
+### Examples
+
+```bash
+depths status
+depths status -H 127.0.0.1 -P 4318 -T 5
+```
+
+---
+
+## `depths` stop
+
+Stop a background server for an instance. Reads the pidfile written by `start`, sends a graceful terminate, and escalates when needed.
+
+### Synopsis
+
+```bash
+depths stop [OPTIONS]
+```
+
+### Options
+
+| Flag                  | Type   |         Default | Description                                                                                                   |
+| --------------------- | ------ | --------------: | ------------------------------------------------------------------------------------------------------------- |
+| `--instance-id`, `-I` | string |       `default` | Instance to stop.                                                                                             |
+| `--dir`, `-D`         | path   | `./depths_data` | Root directory for the instance.                                                                              |
+| `--force`, `-F`       | bool   |         `false` | Force kill if graceful stop fails. If `SIGKILL` is not available on your OS, the CLI falls back to `SIGTERM`. |
+
+### Examples
+
+<CodeGroup>
+```bash macOS/Linux
+depths stop
+depths stop -I prod -D ./observability
+depths stop --force
+```
+
+```powershell Windows (PowerShell)
+depths stop
+depths stop -I prod -D .\observability
+depths stop --force
+```
+</CodeGroup>
+
 ---

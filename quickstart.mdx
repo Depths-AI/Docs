@@ -7,10 +7,10 @@ Depths v0.1.1 ships a CLI that boots a local OTLP/HTTP server (FastAPI) ready to
 ## Install (OS-agnostic)
 
 ```bash
-# Base install
+# Base install, server accepts OTLP JSON bodies
 pip install depths
 
-# If you want to accept OTLP protobuf bodies as well as JSON
+# If you want to accept OTLP protobuf bodies as well
 pip install "depths[proto]"
 ````
 
@@ -48,7 +48,7 @@ Here is the correct Mintlify **`<CodeGroup>`** component:
 
 
 <CodeGroup>
-```bash Unix/Linux (Bash/Zsh)
+```bash macOS/Linux (Bash/Zsh)
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 # or use the signal-specific endpoints if you prefer:
 # http://localhost:4318/v1/traces
@@ -106,7 +106,7 @@ Save this as `span.json` in the directory where you ran `depths init`. This is a
 Send it to the Depths server:
 
 <CodeGroup>
-```bash Unix/Linux
+```bash macOS/Linux
 curl -i http://localhost:4318/v1/traces \
   -X POST \
   -H "Content-Type: application/json" \

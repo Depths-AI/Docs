@@ -2,18 +2,88 @@
 title: Architecture
 description: Bird’s-eye view of signal flow, components, and storage model.
 ---
+Depths v0.1.1 runs a FastAPI service (`depths.cli.app`) that accepts OpenTelemetry over HTTP and persists normalized rows into six Delta Lake tables. The service is built around a single orchestrator, `depths.core.logger.DepthsLogger`, which wires ingestion, validation, batching, local storage, optional S3 shipping, and read APIs.
 
-## System overview
-## Component map
-### depths.cli.app (FastAPI ingestion surface)
-### depths.core.logger.DepthsLogger
-### depths.core.otlp_mapper.OTLPMapper
-### depths.core.producer.LogProducer
-### depths.core.aggregator.LogAggregator
-### depths.core.shipper (seal → upload → verify)
-### depths.core.delta (Delta table handling)
-## Signal journey (ingest → map → produce → aggregate → seal → ship)
-## Data model and tables (see depths.core.schema)
-## Day lifecycle and rollover behavior
-## Failure modes and recovery
-## Observability and health (`/healthz`)
+## Signals and endpoints
+
+Depths listens on the standard OTLP HTTP paths:
+
+- `POST /v1/traces`
+- `POST /v1/logs`
+- `POST /v1/metrics`
+- `GET /healthz` for liveness and minimal diagnostics
+- `GET /api/spans`, `GET /api/logs`, `GET /api/metrics/points`, `GET /api/metrics/hist` for quick reads
+
+OTLP over HTTP uses JSON or protobuf payloads. Typical content types are `application/json` and `application/x-protobuf`. The default HTTP port is 4318 and most SDKs add `/v1/{signal}` to the base endpoint automatically.
+
+## Core components
+
+- **Ingestion surface**: `depths.cli.app` exposes the endpoints and owns process lifecycle.
+- **Orchestrator**: `depths.core.logger.DepthsLogger` constructs and coordinates everything under a single instance root.
+- **Mappers**: `depths.core.otlp_mapper` converts decoded OTLP payloads to row dicts shaped for our tables, stamping resource and scope context.
+- **Producer**: `depths.core.producer.LogProducer` validates and normalizes events against an `EventSchema`.
+- **Aggregator**: `depths.core.aggregator.LogAggregator` drains the producer buffer, batches rows into typed DataFrames, and appends to Delta tables.
+- **Delta I/O**: `depths.core.delta` provides safe creates, appends, compaction, checkpoint, and vacuum helpers over `deltalake` + Polars.
+- **S3 shipper**: `depths.core.shipper` can seal a UTC day, upload to S3, and verify row counts, using `depths.core.config.S3Config`.
+- **Config**: `depths.core.config` centralizes options for logger, producer, aggregator, shipper, and S3.
+
+## Data model and tables
+
+Depths persists six OTel-aligned tables under a per-day directory:
+
+- Spans
+- Span events
+- Span links
+- Logs
+- Metric points (Gauge or Sum)
+- Metric histograms (Histogram, Exponential Histogram, Summary)
+
+Tables are Delta Lake. Polars reads and writes Delta and supports lazy scans that push down filters before work is done, which helps the read APIs. 
+
+## Signal journey
+
+1. **Receive**  
+   FastAPI endpoint in `depths.cli.app` accepts OTLP JSON or protobuf. Payloads may be gzip-encoded. The app creates a process-wide `depths.core.logger.DepthsLogger` on first request.
+
+2. **Map**  
+   `depths.core.otlp_mapper` converts the OTLP message to table-specific rows. Resource and scope attributes are normalized. Correlation IDs are coerced to stable formats.
+
+3. **Produce**  
+   `depths.core.producer.LogProducer` applies the `depths.core.schema.EventSchema` contract: defaults, computed fields, type coercion, and required checks. Valid rows go into a bounded queue.
+
+4. **Aggregate and persist**  
+   `depths.core.aggregator.LogAggregator` batches rows into typed Polars DataFrames and appends them to the correct Delta table under the current UTC day. The aggregator tracks triggers like batch age and size.
+
+5. **Seal and ship (optional)**  
+   At day close, or on demand, `depths.core.shipper` seals the day: compact files, write a checkpoint, vacuum old debris, compute row counts and versions, then upload to S3 and verify. Optimize, checkpoint, and vacuum are standard Delta maintenance steps. 
+
+6. **Read**  
+   Read endpoints and the `depths.core.logger.DepthsLogger.read_*` helpers construct Polars lazy scans over local paths or S3 URIs. Delta’s transaction log lets Polars read only what is needed. 
+
+## Instance layout and day boundaries
+
+Each Depths instance has a root directory that contains configs, indexes, and a `staging/days/YYYY-MM-DD/otel/` tree with one Delta table per signal. Day boundaries are in UTC. Capturing the target table path at enqueue time keeps late batches on the correct day.
+
+## Storage modes
+
+Readers accept a `storage` selector:
+
+- `auto` picks S3 if a sealed day exists remotely, otherwise local.
+- `local` forces local Delta tables.
+- `s3` forces S3 and uses `S3Config.to_delta_storage_options()` to construct reader options.
+
+## Health, lifecycle, and reliability
+
+- `GET /healthz` returns a lightweight JSON document with process and pipeline stats.
+- On startup, the orchestrator prepares schemas and directories, installs exit hooks, and resumes any unshipped days.
+- The producer buffer and the two aggregator threads create backpressure and clear durability points between network ingress and storage.
+
+## Why Delta Lake and Polars
+
+- **Delta** gives ACID tables on object storage and a transaction log. Operations like **OPTIMIZE**, **CHECKPOINT**, and **VACUUM** reduce file counts, make table state discovery fast, and clean stale files. 
+- **Polars** integrates with Delta via `scan_delta` for lazy reads and supports Delta writes, which keeps ingestion simple and reads efficient. 
+
+## What this means for you
+
+- Point any OTLP HTTP exporter to `http://host:4318`. Most exporters append `/v1/{signal}` automatically and support JSON or protobuf. 
+- Depths handles the rest: map, validate, batch, write to Delta, optionally ship to S3, and let you query back with simple endpoints or the Python API.
