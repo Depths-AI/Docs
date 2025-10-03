@@ -1,0 +1,19 @@
+---
+title: Architecture
+description: Bird’s-eye view of signal flow, components, and storage model.
+---
+
+## System overview
+## Component map
+### depths.cli.app (FastAPI ingestion surface)
+### depths.core.logger.DepthsLogger
+### depths.core.otlp_mapper.OTLPMapper
+### depths.core.producer.LogProducer
+### depths.core.aggregator.LogAggregator
+### depths.core.shipper (seal → upload → verify)
+### depths.core.delta (Delta table handling)
+## Signal journey (ingest → map → produce → aggregate → seal → ship)
+## Data model and tables (see depths.core.schema)
+## Day lifecycle and rollover behavior
+## Failure modes and recovery
+## Observability and health (`/healthz`)

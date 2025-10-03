@@ -1,12 +1,148 @@
 ---
-title: Quickstart
-description: Start a local OTLP/HTTP server and send a test signal.
+title: Quickstart - Experience depths in 100 seconds
+description: Start an OTLP/HTTP server with the CLI and send your first signal.
 ---
+Depths v0.1.1 ships a CLI that boots a local OTLP/HTTP server (FastAPI) ready to receive traces, logs, and metrics at the standard `/v1/*` endpoints.
 
-# Quickstart
+## Install (OS-agnostic)
 
-## Install
-## Start the server
+```bash
+# Base install
+pip install depths
+
+# If you want to accept OTLP protobuf bodies as well as JSON
+pip install "depths[proto]"
+````
+
+## Start the server (OS-agnostic)
+
+```bash
+# 1) Create an instance with default scaffold (configs, tables, etc.)
+depths init 
+
+# 2) Start the uvicorn server for the default instance (binds 0.0.0.0:4318 by default)
+depths start
+```
+
+Depths is by design multi-tenant at a project level. We define an instance as a particularly configured
+logger. Under an instance, you can store telemetry for multiple projects, just that each of them will share the same 
+configuration for the ingestion server.
+
+After `start`, the server exposes:
+
+* `GET /healthz` (liveness + minimal metrics)
+* `POST /v1/traces`  (OTLP/HTTP JSON or protobuf)
+* `POST /v1/logs`
+* `POST /v1/metrics`
+* `GET /api/spans`, `GET /api/logs`, `GET /api/metrics/points`, `GET /api/metrics/hist` (simple read APIs)
+
 ## Send your first event
+
+### Option A: point an OTel SDK or Collector at Depths
+
+Set your exporter endpoint to the server:
+
+To update that command for Mintlify's tabbed code blocks, you need to use the platform-specific syntax for setting an environment variable.
+
+Here is the correct Mintlify **`<CodeGroup>`** component:
+
+
+<CodeGroup>
+```bash Unix/Linux (Bash/Zsh)
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+# or use the signal-specific endpoints if you prefer:
+# http://localhost:4318/v1/traces
+# http://localhost:4318/v1/logs
+# http://localhost:4318/v1/metrics
+````
+
+```powershell Windows (PowerShell)
+$env:OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318"
+# or use the signal-specific endpoints if you prefer:
+# http://localhost:4318/v1/traces
+# http://localhost:4318/v1/logs
+# http://localhost:4318/v1/metrics
+```
+
+</CodeGroup>
+
+-----
+
+### Option B: send a minimal trace with cURL
+
+Save this as `span.json` in the directory where you ran `depths init`. This is a toy payload:
+
+```json
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          { "key": "service.name", "value": { "stringValue": "test-with-curl" } }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": { "name": "manual-test" },
+          "spans": [
+            {
+              "traceId": "71699b6fe85982c7c8995ea3d9c95df2",
+              "spanId": "3c191d03fa8be065",
+              "name": "spanitron",
+              "kind": 2,
+              "droppedAttributesCount": 0,
+              "events": [],
+              "droppedEventsCount": 0,
+              "status": { "code": 1 }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Send it to the Depths server:
+
+<CodeGroup>
+```bash Unix/Linux
+curl -i http://localhost:4318/v1/traces \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d @span.json
+````
+
+```powershell Windows (PowerShell)
+# Use curl.exe in a single line (no backslash for continuation)
+curl.exe -i http://localhost:4318/v1/traces -X POST -H "Content-Type: application/json" -d "@span.json"
+```
+
+</CodeGroup>
+
 ## Verify ingestion
+
+First, we can check the health of the server using `status` command.
+This command provides a comprehensive single-pane snapshot of the telemetry ingestion server.
+
+```bash
+depths status
+```
+
+We can also take a peak at the most recent rows in our telemetry tables, persisted locally.
+
+```bash
+# Quick terminal peek at recent rows
+depths view --table spans --rows 5
+```
+
+You can also use the **API Reference** tab in these docs. The Try it button will call your local server at `http://localhost:4318`.
+
 ## Stop the server
+
+```bash
+# Clean shutdown
+depths stop
+```
+
+With that, you have experienced a purely pythonic OTel native telemetry ingestion server.

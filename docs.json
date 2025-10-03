@@ -13,7 +13,19 @@
           {
             "group": "Get Started",
             "pages": [
-              "quickstart"
+              "quickstart",
+              "architecture",
+              "s3-configuration"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages":[
+              "guides/build-custom-server",
+              "guides/custom-querying",
+              "guides/customize-logger",
+              "guides/cli-options",
+              "guides/s3-backup"
             ]
           }
         ]
