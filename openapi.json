@@ -1,0 +1,230 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Depths – OTLP Ingestion & Query API",
+    "version": "0.1.1",
+    "description": "FastAPI OTLP/HTTP ingestion and read/query endpoints."
+  },
+  "servers": [
+    { "url": "http://localhost:4318" }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "getHealthz",
+        "summary": "Health check",
+        "description": "Returns a minimal liveness/metrics snapshot.",
+        "responses": {
+          "200": {
+            "description": "Alive",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "additionalProperties": true },
+                "example": { "ok": true, "logger": { "uptime_s": 12 } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/traces": {
+      "post": {
+        "operationId": "postTraces",
+        "summary": "Ingest OTLP traces",
+        "description": "Accepts OTLP TraceService requests in JSON or protobuf.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "type": "object" } },
+            "application/x-protobuf": { "schema": { "type": "string", "format": "binary" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted (may include partialSuccess for rejected spans)",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "additionalProperties": true },
+                "example": { "partialSuccess": { "rejectedSpans": 0 } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/logs": {
+      "post": {
+        "operationId": "postLogs",
+        "summary": "Ingest OTLP logs",
+        "description": "Accepts OTLP LogService requests in JSON or protobuf.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "type": "object" } },
+            "application/x-protobuf": { "schema": { "type": "string", "format": "binary" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted (may include partialSuccess for rejected log records)",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "additionalProperties": true },
+                "example": { "partialSuccess": { "rejectedLogRecords": 0 } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "post": {
+        "operationId": "postMetrics",
+        "summary": "Ingest OTLP metrics",
+        "description": "Accepts OTLP MetricService requests in JSON or protobuf.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "type": "object" } },
+            "application/x-protobuf": { "schema": { "type": "string", "format": "binary" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted (may include partialSuccess for rejected data points)",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "additionalProperties": true },
+                "example": { "partialSuccess": { "rejectedDataPoints": 0 } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spans": {
+      "get": {
+        "operationId": "querySpans",
+        "summary": "Query spans",
+        "description": "Filterable read over spans. Returns { rows, count }.",
+        "parameters": [
+          { "in": "query", "name": "date_from", "schema": { "type": "string" } },
+          { "in": "query", "name": "date_to", "schema": { "type": "string" } },
+          { "in": "query", "name": "project_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "service_name", "schema": { "type": "string" } },
+          { "in": "query", "name": "trace_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "span_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "name", "schema": { "type": "string" } },
+          { "in": "query", "name": "name_like", "schema": { "type": "string" } },
+          { "in": "query", "name": "status_code", "schema": { "type": "string" } },
+          { "in": "query", "name": "kind", "schema": { "type": "string" } },
+          { "in": "query", "name": "time_ms_from", "schema": { "type": "integer" } },
+          { "in": "query", "name": "time_ms_to", "schema": { "type": "integer" } },
+          { "in": "query", "name": "select", "schema": { "type": "string" } },
+          { "in": "query", "name": "max_rows", "schema": { "type": "integer", "default": 100 } },
+          { "in": "query", "name": "storage", "schema": { "type": "string", "enum": ["auto", "local", "s3"], "default": "auto" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "rows": { "type": "array", "items": { "type": "object", "additionalProperties": true } }, "count": { "type": "integer" } }, "required": ["rows", "count"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs": {
+      "get": {
+        "operationId": "queryLogs",
+        "summary": "Query logs",
+        "description": "Filterable read over logs. Returns { rows, count }.",
+        "parameters": [
+          { "in": "query", "name": "date_from", "schema": { "type": "string" } },
+          { "in": "query", "name": "date_to", "schema": { "type": "string" } },
+          { "in": "query", "name": "project_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "service_name", "schema": { "type": "string" } },
+          { "in": "query", "name": "severity_ge", "schema": { "type": "integer" } },
+          { "in": "query", "name": "body_like", "schema": { "type": "string" } },
+          { "in": "query", "name": "trace_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "span_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "time_ms_from", "schema": { "type": "integer" } },
+          { "in": "query", "name": "time_ms_to", "schema": { "type": "integer" } },
+          { "in": "query", "name": "select", "schema": { "type": "string" } },
+          { "in": "query", "name": "max_rows", "schema": { "type": "integer", "default": 100 } },
+          { "in": "query", "name": "storage", "schema": { "type": "string", "enum": ["auto", "local", "s3"], "default": "auto" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "rows": { "type": "array", "items": { "type": "object", "additionalProperties": true } }, "count": { "type": "integer" } }, "required": ["rows", "count"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics/points": {
+      "get": {
+        "operationId": "queryMetricPoints",
+        "summary": "Query metric points",
+        "description": "Gauge/Sum points. Returns { rows, count }.",
+        "parameters": [
+          { "in": "query", "name": "date_from", "schema": { "type": "string" } },
+          { "in": "query", "name": "date_to", "schema": { "type": "string" } },
+          { "in": "query", "name": "project_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "service_name", "schema": { "type": "string" } },
+          { "in": "query", "name": "instrument_name", "schema": { "type": "string" } },
+          { "in": "query", "name": "instrument_unit", "schema": { "type": "string" } },
+          { "in": "query", "name": "instrument_type", "schema": { "type": "string" } },
+          { "in": "query", "name": "select", "schema": { "type": "string" } },
+          { "in": "query", "name": "max_rows", "schema": { "type": "integer", "default": 100 } },
+          { "in": "query", "name": "storage", "schema": { "type": "string", "enum": ["auto", "local", "s3"], "default": "auto" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "rows": { "type": "array", "items": { "type": "object", "additionalProperties": true } }, "count": { "type": "integer" } }, "required": ["rows", "count"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics/hist": {
+      "get": {
+        "operationId": "queryMetricHists",
+        "summary": "Query metric histograms",
+        "description": "Histogram/ExpHistogram/Summary series. Returns { rows, count }.",
+        "parameters": [
+          { "in": "query", "name": "date_from", "schema": { "type": "string" } },
+          { "in": "query", "name": "date_to", "schema": { "type": "string" } },
+          { "in": "query", "name": "project_id", "schema": { "type": "string" } },
+          { "in": "query", "name": "service_name", "schema": { "type": "string" } },
+          { "in": "query", "name": "instrument_name", "schema": { "type": "string" } },
+          { "in": "query", "name": "instrument_unit", "schema": { "type": "string" } },
+          { "in": "query", "name": "instrument_type", "schema": { "type": "string" } },
+          { "in": "query", "name": "select", "schema": { "type": "string" } },
+          { "in": "query", "name": "max_rows", "schema": { "type": "integer", "default": 100 } },
+          { "in": "query", "name": "storage", "schema": { "type": "string", "enum": ["auto", "local", "s3"], "default": "auto" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object", "properties": { "rows": { "type": "array", "items": { "type": "object", "additionalProperties": true } }, "count": { "type": "integer" } }, "required": ["rows", "count"] }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

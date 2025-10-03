@@ -2,29 +2,18 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Depths AI Documentation",
-  "colors": {
-    "primary": "#00FF9C",
-    "light": "#00FF9C",
-    "dark": "#000957"
-  },
+  "colors": { "primary": "#00FF9C", "light": "#00FF9C", "dark": "#000957" },
   "favicon": "/favicon.svg",
+
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Docs",
         "groups": [
           {
             "group": "Get Started",
             "pages": [
-              "introduction",
               "quickstart"
-            ]
-          },
-          {
-            "group": "Vector Database: Details",
-            "pages": [
-              "vector-database/centroid",
-              "vector-database/search"
             ]
           }
         ]
@@ -33,39 +22,28 @@
         "tab": "API Reference",
         "groups": [
           {
-            "group": "API Documentation",
+            "group": "API reference",
+            "openapi": "openapi.json",
             "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "VectorDatabase",
-            "pages": [
-              "api-reference/vector/get",
-              "api-reference/vector/create",
-              "api-reference/vector/delete"
+              "api-reference/health-check",
+              "api-reference/ingest-otlp-traces",
+              "api-reference/ingest-otlp-logs",
+              "api-reference/ingest-otlp-metrics",
+              "api-reference/query-spans",
+              "api-reference/query-logs",
+              "api-reference/query-metric-points",
+              "api-reference/query-metric-histograms"
             ]
           }
         ]
       }
     ]
   },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
+
+  "logo": { "light": "/logo/light.svg", "dark": "/logo/dark.svg" },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:admin@depthsai.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://www.depthsai.com/dashboard"
-    }
+    "links": [{ "label": "Support", "href": "mailto:admin@depthsai.com" }],
+    "primary": { "type": "button", "label": "Website", "href": "https://www.depthsai.com/website" }
   },
   "footer": {
     "socials": {
