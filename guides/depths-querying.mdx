@@ -5,17 +5,179 @@ description: Explore read_logs as LazyFrame or dicts, apply predicates, project 
 
 # Querying possibilities with Depths
 
-## Overview
+Depths v0.1.1 lets you query persisted data through helpers on `depths.core.logger.DepthsLogger`. 
+This guide focuses on logs and shows four patterns: return rows as Python dicts, keep results lazy for Polars transforms, apply named predicates, and group results.
+This rich flexibility allows you to perform efficient queries on your data, regardless of whether it is stored on disk or on S3.
+
 ## What you will build
+
+- A local dataset written via `DepthsLogger`
+- A “rows as dicts” read for quick printing
+- A LazyFrame read for chained transforms and a final `collect`
+- Examples of named predicates and projection
+- A grouped severity summary
+
 ## Prerequisites
-## Imports and versions
-## Build a small dataset
-## Stop and flush
-## Read as LazyFrame — return_as="lazy"
-## Read as Python objects — return_as="dicts"
-## Named predicates (date range, project_id, service_name)
-## Filter helpers (severity_ge, body_like)
-## Projection (select) and row limits (max_rows)
-## Group by severity_text on a LazyFrame
-## Storage selector (auto | local | s3) overview
-## Wrap-up and next steps
+
+- Python 3.12+
+- `pip install depths`
+
+## Imports and setup
+
+We’ll set up a fresh instance and generate a small log dataset with varying severities and bodies. We capture today’s date as a **timezone-aware** UTC string so day filters are precise.
+
+```python
+import os, time, datetime as dt
+import polars as pl
+from depths.core.logger import DepthsLogger
+
+INSTANCE_ID = "querying_demo"
+INSTANCE_DIR = os.path.abspath("./depths_querying_demo")
+PROJECT_ID = "q_project"
+SERVICE_NAME = "q_service"
+N = 900
+````
+
+## Create the logger and write a sample dataset
+
+As shown in previous guides, we construct a logger, create minimal OTel-shaped log rows, ingest them, 
+and then stop with an automatic flush to persist batches.
+
+```python
+logger = DepthsLogger(instance_id=INSTANCE_ID, instance_dir=INSTANCE_DIR)
+
+now_ns = lambda: int(time.time() * 1_000_000_000)
+
+def make_row(i: int) -> dict:
+    sev_num = 17 if (i % 10 == 0) else (13 if (i % 4 == 0) else 9)
+    sev_txt = "ERROR" if sev_num >= 17 else ("WARN" if sev_num >= 13 else "INFO")
+    return {
+        "project_id": PROJECT_ID,
+        "service_name": SERVICE_NAME,
+        "time_unix_nano": now_ns(),
+        "severity_number": sev_num,
+        "severity_text": sev_txt,
+        "body": f"searchable message {i}"
+    }
+
+accepted = 0
+for i in range(N):
+    ok, _ = logger.ingest_log(make_row(i))
+    if ok:
+        accepted += 1
+
+logger.stop(flush="auto")
+```
+
+## A basic read as dicts
+
+We query today’s data using an aware UTC day string, select a few columns, and cap results with max_rows. 
+Returning dicts is ergonomic for quick inspection and printing.
+
+```python
+today = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
+
+rows = logger.read_logs(
+    date_from=today,
+    date_to=today,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    select=["event_ts", "severity_text", "body"],
+    max_rows=5
+)
+
+print(len(rows))
+for r in rows:
+    print(r)
+```
+
+## Keep it lazy for downstream transforms
+
+Ask Depths for a LazyFrame to build a transform pipeline. 
+Here we add a string-length column using str.len_chars() on the body column and 
+then collect() to realize results. with_columns adds or replaces columns in a lazy plan.
+
+LazyFrame option allows us to prune the data down to most relevant segments, minimizing disk/S3 reads.
+
+```python
+lf = logger.read_logs(
+    date_from=today,
+    date_to=today,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    select=["event_ts", "severity_text", "body"],
+    return_as="lazy"
+)
+
+out = (
+    lf
+    .with_columns(pl.col("body").str.len_chars().alias("body_len"))
+    .limit(5)
+    .collect()
+)
+
+print(out)
+```
+
+## Named predicates: time, equality, severity, substring
+
+Depths read helpers expose common predicates that push down work. 
+Here we constrain by day, project, and service; filter by minimum severity; 
+and search for a substring in body via the `body_like` predicate. 
+We also project a small set of columns and limit rows.
+```python
+subset = logger.read_logs(
+    date_from=today,
+    date_to=today,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    severity_ge=13,
+    body_like="searchable",
+    select=["event_ts", "severity_text", "body"],
+    max_rows=10
+)
+
+for r in subset:
+    print(r["severity_text"], r["body"])
+```
+
+## Group-by summary on a lazy plan
+
+We compute a quick severity distribution. 
+In Polars, call group_by then agg with expression and sort the result. 
+We collect only once at the end.
+
+
+```python
+lf2 = logger.read_logs(
+    date_from=today,
+    date_to=today,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    select=["severity_text"],
+    return_as="lazy"
+)
+
+summary = (
+    lf2
+    .group_by("severity_text")
+    .agg(pl.len().alias("count"))
+    .sort("count", descending=True)
+    .collect()
+)
+
+print(summary)
+```
+
+## Storage selector overview
+
+`read_logs` accepts a `storage` selector. Use `local` to force local Delta tables, `s3` to force object storage when S3 is configured, or `auto` to let Depths choose. 
+This guide used local storage only. The default value is `auto` so you don't have to worry about explicitly selecting `s3`
+when you start backing up the telemetry on an S3 bucket, the queries would run seamlessly.
+
+## What you learned
+
+* Returning rows as dicts fits simple scripts and prints
+* Returning a lazy frame lets you add Polars transforms and collect once
+* Named predicates cut input size and speed up reads
+* Group-by on a lazy plan gives quick summaries without building a separate ETL
