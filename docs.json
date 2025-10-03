@@ -21,30 +21,12 @@
           {
             "group": "Guides",
             "pages":[
-              "guides/build-custom-server",
-              "guides/custom-querying",
-              "guides/customize-logger",
-              "guides/cli-options",
-              "guides/s3-backup"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API Reference",
-        "groups": [
-          {
-            "group": "API reference",
-            "openapi": "openapi.json",
-            "pages": [
-              "api-reference/health-check",
-              "api-reference/ingest-otlp-traces",
-              "api-reference/ingest-otlp-logs",
-              "api-reference/ingest-otlp-metrics",
-              "api-reference/query-spans",
-              "api-reference/query-logs",
-              "api-reference/query-metric-points",
-              "api-reference/query-metric-histograms"
+              "guides/depths-from-scratch",
+              "guides/customize-depths",
+              "guides/depths-querying",
+              "guides/s3-backups",
+              "guides/cli-options"
+              
             ]
           }
         ]

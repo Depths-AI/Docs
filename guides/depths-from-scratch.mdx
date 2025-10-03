@@ -1,0 +1,145 @@
+---
+title: Depths from scratch
+description: Create a DepthsLogger, ingest a small dataset, and run a basic query end to end.
+---
+
+Depths v0.1.1 can be used directly as a Python library. In this guide you will create a telemetry ingestor 
+using `DepthsLogger()` class, ingest a small set of log rows (which automatically get persisted on disk),
+ and run a basic query with filters and projection.
+
+## What you will build
+
+- A local instance directory for persisting telemetry signals on disk
+- A `DepthsLogger()` object that automatically persists received telemetry signals on disk
+- A tiny dataset of log rows with a few varying fields
+- A verification query that returns either dicts or a lazy frame
+
+## Prerequisites
+
+- Python 3.10+
+- `pip install depths`
+
+## Imports and setup
+
+We keep the instance id and directory explicit. Day boundaries are UTC. The logger will create directories and configs on first use.
+
+```python
+import os, time, datetime as dt
+from depths.core.logger import DepthsLogger
+
+INSTANCE_ID = "demo_from_scratch"
+INSTANCE_DIR = os.path.abspath("./depths_from_scratch")
+PROJECT_ID = "scratch_project"
+SERVICE_NAME = "scratch_service"
+N = 800
+````
+
+## Create the logger
+
+`depths.core.logger.DepthsLogger` prepares today’s day folder, installs defaults, and starts aggregators by default.
+
+```python
+logger = DepthsLogger(instance_id=INSTANCE_ID, instance_dir=INSTANCE_DIR)
+```
+
+## Build a minimal dataset
+
+Depths expects OTel-shaped rows for each table. For logs, the required fields are satisfied by providing `project_id` and a timestamp in nanoseconds; the rest is normalized by the producer. We vary severity and body to make filtering obvious.
+
+```python
+now_ns = lambda: int(time.time() * 1_000_000_000)
+
+def make_row(i: int) -> dict:
+    sev_num = 13 if (i % 7 == 0) else 9
+    sev_txt = "WARN" if sev_num >= 13 else "INFO"
+    return {
+        "project_id": PROJECT_ID,
+        "service_name": SERVICE_NAME,
+        "time_unix_nano": now_ns(),
+        "severity_number": sev_num,
+        "severity_text": sev_txt,
+        "body": f"hello depths {i}"
+    }
+
+rows = [make_row(i) for i in range(N)]
+```
+
+## Ingest synchronously
+
+The logger validates and enqueues each row. Aggregators batch and persist to Delta in the background.
+
+```python
+accepted = 0
+for r in rows:
+    ok, reason = logger.ingest_log(r)
+    if ok:
+        accepted += 1
+```
+
+## Stop and flush
+
+`stop(flush="auto")` performs a bounded, quick flush of pending batches to the local disk.
+
+```python
+logger.stop(flush="auto")
+```
+
+## Basic verification as dicts
+
+`depths.core.logger.DepthsLogger.read_logs` composes a lazy plan with pushdown filters. By default it materializes to a list of dicts. We select a few columns and limit to five latest rows.
+
+```python
+today = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
+
+rows = logger.read_logs(
+    date_from=today,
+    date_to=today,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    select=["event_ts", "severity_text", "body", "service_name"],
+    max_rows=5
+)
+
+print(len(rows), "rows")
+for r in rows:
+    print(r)
+```
+
+## The same query as a lazy frame
+
+Set `return_as="lazy"` to keep everything lazy for downstream operations. Collect only when you are ready.
+
+```python
+q = logger.read_logs(
+    date_from=today,
+    date_to=today,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    severity_ge=13,
+    body_like="hello",
+    select=["event_ts", "severity_text", "body", "service_name"],
+    max_rows=5,
+    return_as="lazy"
+)
+
+print(q.collect())
+```
+
+## What just happened
+
+* `depths.core.logger.DepthsLogger` created our telemetry ingestor, with all the config and empty storage tables on the disk.
+* Each call to `ingest_log` validated the row against `depths.core.schema.LOG_SCHEMA` via `depths.core.producer.LogProducer`,
+ensuring that only correct OpenTelemtry compatible rows get stored.
+* Behind the scenes, `depths.core.aggregator.LogAggregator` batched rows into typed Polars frames and appended to the logs Delta table under today’s UTC day,
+giving us the disk persistence.
+* `read_logs` built a lazy plan with equality, substring, and time-range predicates for efficient querying.
+We can then view these result as either a list of dictionaries, a polars dataframe or further perform ops on lazyframe (useful for operations like counts and other statistical options).
+We recommend reading about the Polars package and LazyFrame concept. Since we don't expect every Depths user to be familiar with Polars,
+the default query function response is a list of dictionary objects.
+
+## Where to go next
+
+* Tune behavior with `depths.core.config.DepthsLoggerOptions` and producer+aggregator configs in **Customizing Depths**
+* Explore more query patterns (projection, limits, groups) in **Querying possibilities with Depths**
+* Add S3 shipping and read sealed days from object storage in **S3 backups from scratch**
+
