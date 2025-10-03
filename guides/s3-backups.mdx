@@ -5,18 +5,199 @@ description: Load S3 config from env, ingest to a past day, seal and ship, and q
 
 # S3 backups from scratch
 
-## Overview
+Depths v0.1.1 can seal each UTC day of data and ship it to S3 or an S3-compatible endpoint. 
+In this guide you will configure S3 via environment, ingest logs into a past day for determinism, run a synchronous ship, 
+and then read back from S3.
+
+Please note that this process happens automatically behind the scenes, we are
+manually doing it here for demonstrative purposes.
+
 ## What you will build
-## Prerequisites — environment variables for S3
-## Imports and versions
-## Load depths.core.config.S3Config from environment
-## Initialize depths.core.logger.DepthsLogger with S3
+
+- A local instance with a small dataset written into “yesterday”
+- A one-shot ship that seals, uploads, verifies row counts, and cleans local copies
+- A verification query that reads sealed data from S3
+
+## Prerequisites — S3 environment variables
+
+Set the environment before starting Python.
+
+**Required**
+- `S3_BUCKET`
+- `AWS_ACCESS_KEY_ID` or `S3_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY` or `S3_SECRET_KEY` or `S3_SECRET_ACCESS_KEY`
+- `AWS_REGION` or `S3_REGION`
+- `AWS_ENDPOINT_URL` or `S3_URL`
+
+**Optional**
+- `S3_PREFIX`
+- `AWS_SESSION_TOKEN`
+
+## Imports and setup
+
+We keep the instance explicit and generate a small dataset with stable timestamps in the target day.
+
+```python
+import os, time, datetime as dt
+from pathlib import Path
+import polars as pl
+from depths.core.logger import DepthsLogger
+from depths.core.config import S3Config, DepthsLoggerOptions
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+INSTANCE_ID = "s3_from_scratch"
+INSTANCE_DIR = os.path.abspath("./depths_s3_from_scratch")
+PROJECT_ID = "s3_project"
+SERVICE_NAME = "s3_service"
+N = 600
+````
+
+For convenience, we loaded the environment from .env file using the python-dotenv package.
+The `S3Config.from_env()` reads the loaded environment, validates configuration and provides reader and upload options internally. 
+
+Note that `from_env()` will also pick the environment variables set via terminal, just that
+load_dotenv provides convenience of loading from a .env file
+
+## Load S3 config and initialize the logger
+
+We ensure S3 is present, then start a logger. The logger prepares directories, schemas, and background services.
+
+Note that since we are manually controlling S3 backup here, we need to toggle
+a setting called `shipping_enabled` as false, to ensure that we manually control the S3 shipping behavior.
+```python
+s3 = S3Config.from_env()
+logger = DepthsLogger(
+    instance_id=INSTANCE_ID,
+    instance_dir=INSTANCE_DIR,
+    s3=s3,
+    options=DepthsLoggerOptions(
+        shipper_enabled=False  # we’re driving shipping explicitly
+    ),
+)
+```
+
+If the environment is incomplete, shipping is disabled but an attempt to ship to S3 will throw errors.
+Therefore, before proceeding forward, you can quickly do a `print(s3)` to check if config was correctly loaded.
+
+Reads can still use local storage.
+
 ## Target a past day for deterministic shipping
-## Ingest a sample batch
-## Stop and flush
-## Manual seal and ship — depths.core.logger.DepthsLogger.ship_now
-## Verify shipping summary and counts
-## Query from S3 with named predicates (return_as="lazy")
-## Quick subset (WARN+ with substring match)
-## Notes on instance layout and S3 paths
-## Wrap-up and next steps
+
+We ingest into “yesterday” by two steps: compute a base timestamp at UTC midnight yesterday, and retarget the logs table to yesterday’s local path so all batches land under the same day.
+Retargeting the aggregator ensures files are created under the desired day directory even if the process runs today.
+
+We are doing this manually purely for demonstrative purposes. In direct usage, the `DepthsLogger` automatically does such 
+rollovers.
+
+```python
+day = (dt.datetime.now(dt.UTC).date() - dt.timedelta(days=1)).strftime("%Y-%m-%d")
+midnight_y = dt.datetime.combine(dt.datetime.now(dt.UTC).date() - dt.timedelta(days=1), dt.time(0, 0, 0), tzinfo=dt.UTC)
+base_ns = int(midnight_y.timestamp() * 1_000_000_000)
+
+instance_root = os.path.join(INSTANCE_DIR, INSTANCE_ID)
+
+# Toggling internals to manually create and handle `yesterday`'s data
+day_root = DepthsLogger._local_day_path(Path(instance_root), day)
+Path(day_root).mkdir(parents=True, exist_ok=True)
+logs_path = DepthsLogger._otel_table_path(day_root, "logs")
+logger._aggs["logs"].retarget_table_path(logs_path, initialize=True)
+```
+
+
+## Ingest a batch into yesterday
+
+We vary severity and body so the S3 read is easy to spot. Timestamps advance by 1 ms to stay in order.
+
+```python
+accepted = 0
+for i in range(N):
+    sev_num = 13 if (i % 6 == 0) else 9
+    sev_txt = "WARN" if sev_num >= 13 else "INFO"
+    ok, _ = logger.ingest_log(
+        {
+            "project_id": PROJECT_ID,
+            "service_name": SERVICE_NAME,
+            "schema_version": 1,
+            "scope_name": "s3-guide",
+            "scope_version": "v0.1.1",
+            "time_unix_nano": base_ns + (i * 1_000_000),
+            "observed_time_unix_nano": base_ns + (i * 1_000_000),
+            "severity_text": sev_txt,
+            "severity_number": sev_num,
+            "body": f"s3 demo row {i}",
+        }
+    )
+    if ok:
+        accepted += 1
+
+logger.stop(flush="auto")
+```
+
+## Seal and ship now
+
+We call a synchronous ship. It seals yesterday, uploads to S3, verifies remote row counts, and cleans local copies if verification passes. 
+The return value is a compact status summary of the process.
+
+Once again, this shipping happens automatically behind the scenes and is generally not to be controlled manually.
+
+```python
+result = logger.ship_now(day)
+print(result)
+```
+
+To prevent data corruption, current day is not shippable in `DepthsLogger`. 
+Past days are allowed. The summary includes per-table counts and an overall status.
+
+## Read back from S3
+
+We run two reads: a small dict sample and a LazyFrame for a quick severity rollup. The `storage="s3"` selector forces object storage.
+
+```python
+rows = logger.read_logs(
+    date_from=day,
+    date_to=day,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    select=["event_ts", "severity_text", "body"],
+    max_rows=5,
+    storage="s3"
+)
+
+print(len(rows))
+for r in rows:
+    print(r)
+
+lf = logger.read_logs(
+    date_from=day,
+    date_to=day,
+    project_id=PROJECT_ID,
+    service_name=SERVICE_NAME,
+    select=["severity_text"],
+    storage="s3",
+    return_as="lazy"
+)
+
+summary = (
+    lf
+    .group_by("severity_text")
+    .agg(pl.len().alias("count"))
+    .sort("count", descending=True)
+    .collect()
+)
+
+print(summary)
+```
+
+The querying experience is identical to what we have seen so far.
+The design choice ensures that your querying DX stays agnostic of whether
+the logs reside locally or on S3.
+
+## What you learned
+
+* How to configure S3 for Depths using environment variables
+* How to write into a past day by retargeting the logs table and using UTC timestamps
+* How to run a one-shot ship and inspect its summary
+* How to read sealed data from S3 as dicts or as a LazyFrame for quick summaries
